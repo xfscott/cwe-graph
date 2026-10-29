@@ -250,6 +250,8 @@ body.resizing { cursor: col-resize; user-select: none; }
 .cls-note { color: var(--muted); }
 .dep-note { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
 .dep-note .cmp-cwe { display: block; }
+.dep-note.sg .cmp-cwe { display: inline; white-space: nowrap; }
+.cmp-example { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
 .cls-error { color: #b3261e; }
 .cls-list { list-style: none; }
 .cls-list li {
@@ -308,6 +310,11 @@ body.resizing { cursor: col-resize; user-select: none; }
 .info ul { list-style: none; }
 .info li { padding: 1px 0; }
 .info .rel-name { color: var(--muted); }
+.info .sg-why { display: block; font-size: 12px; font-style: italic; }
+.info details.examples summary {
+  cursor: pointer; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted); margin: 10px 0 3px;
+}
 /* Relationship lists: IDs in one column, titles in the next, so a title that
    wraps stays aligned under its first line (and every title starts at the same x). */
 .info ul.rel { display: grid; grid-template-columns: max-content 1fr; gap: 2px 6px; }

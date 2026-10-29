@@ -6,7 +6,8 @@ Usage:
     python3 scripts/build_data.py path/to/cwec_vX.Y.xml[.zip]
 
 The output assigns `window.CWE_DATA` so index.html works straight from disk
-(file://) with no server.
+(file://) with no server. MITRE's observed examples (CVEs per weakness, ~450 KB) go to a
+second file, data/cwe-examples.js (`window.CWE_EXAMPLES`), which the page loads after start.
 
 Edge direction conventions (source -> target):
     ChildOf     child -> parent        (per view; View_ID kept)
@@ -28,6 +29,7 @@ from pathlib import Path
 
 URL = "https://cwe.mitre.org/data/xml/cwec_latest.xml.zip"
 OUT = Path(__file__).resolve().parent.parent / "data" / "cwe-data.js"
+OUT_EXAMPLES = OUT.with_name("cwe-examples.js")
 
 UNDIRECTED = {"PeerOf", "CanAlsoBe"}
 KEPT = {"ChildOf", "PeerOf", "CanAlsoBe", "CanPrecede", "Requires"}
@@ -61,6 +63,7 @@ def build(xml: bytes) -> dict:
     nodes = {}
     raw_edges = []
     deprecated = {}
+    examples = {}
     for w in root.findall("c:Weaknesses/c:Weakness", NS):
         if w.get("Status") == "Deprecated":
             # MITRE's pointers to what replaces it: mapping suggestions, else CWE IDs in the description
@@ -86,6 +89,14 @@ def build(xml: bytes) -> dict:
             nodes[wid]["k"] = terms  # MITRE's alternate terms (XSS, Information Disclosure …), for search
         if w.get("Diagram"):
             nodes[wid]["g"] = w.get("Diagram")  # MITRE's picture of the weakness, a path on cwe.mitre.org
+        sugg = [[s.get("CWE_ID"), s.get("Comment") or ""]
+                for s in w.findall("c:Mapping_Notes/c:Suggestions/c:Suggestion", NS)]
+        if sugg:
+            nodes[wid]["sg"] = sugg  # MITRE's mapping suggestions: [[cwe id, when to use it]]
+        ex = [[text(o.find("c:Reference", NS)), text(o.find("c:Description", NS))]
+              for o in w.findall("c:Observed_Examples/c:Observed_Example", NS)]
+        if ex:
+            examples[wid] = ex  # [[CVE id (a few are other references), description]]
         if w.get("Abstraction") == "Compound":
             nodes[wid]["t"] = w.get("Structure")  # Chain or Composite (MITRE draws them differently)
         for rw in w.findall("c:Related_Weaknesses/c:Related_Weakness", NS):
@@ -110,6 +121,11 @@ def build(xml: bytes) -> dict:
 
     for d in deprecated.values():
         d["to"] = list(dict.fromkeys(t for t in d["to"] if t in nodes))
+    for n in nodes.values():
+        if "sg" in n:
+            n["sg"] = [s for s in n["sg"] if s[0] in nodes]
+            if not n["sg"]:
+                del n["sg"]
 
     used_views = sorted({e[3] for e in edges if e[2] == "ChildOf"}, key=int)
     return {
@@ -119,16 +135,21 @@ def build(xml: bytes) -> dict:
         "nodes": nodes,
         "edges": edges,
         "deprecated": deprecated,
+        "examples": examples,
     }
 
 
 def main() -> None:
     data = build(load_xml(sys.argv[1] if len(sys.argv) > 1 else None))
+    examples = data.pop("examples")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
     OUT.write_text(f"window.CWE_DATA={payload};\n", "utf-8")
+    payload = json.dumps(examples, ensure_ascii=False, separators=(",", ":"))
+    OUT_EXAMPLES.write_text(f"window.CWE_EXAMPLES={payload};\n", "utf-8")
     print(f"CWE {data['version']} ({data['date']}): {len(data['nodes'])} weaknesses, "
-          f"{len(data['edges'])} edges -> {OUT}", file=sys.stderr)
+          f"{len(data['edges'])} edges, {sum(map(len, examples.values()))} observed examples -> {OUT.parent}",
+          file=sys.stderr)
 
 
 if __name__ == "__main__":

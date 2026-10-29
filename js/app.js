@@ -7,6 +7,10 @@
   // Deprecated weaknesses aren't graph nodes, but the model, CVE records and old links still
   // name them: { id: { n, d, to: [MITRE's suggested replacements] } }.
   const DEPRECATED = DATA.deprecated || {};
+  // MITRE's observed examples, loaded after start from data/cwe-examples.js:
+  // EXAMPLES cwe → [[CVE id, description]], EXAMPLE_OF CVE id → [cwe ids].
+  let EXAMPLES = null;
+  const EXAMPLE_OF = {};
 
   /* ── Encodings ───────────────────────────────────────────
      MITRE's own CWE-site icons: a lettered circle per abstraction (P/C/B/V),
@@ -125,6 +129,15 @@
     if (!d) return "";
     const to = d.to.length ? `; MITRE suggests ${d.to.map((t) => cweLink(t)).join("")}` : "; MITRE names no replacement";
     return `<span class="dep-note" title="${escHtml(d.d)}">${usageBadge("Deprecated")} in CWE ${escHtml(DATA.version)}${to}</span>`;
+  }
+
+  // MITRE's mapping suggestions for a CWE (mostly on Discouraged ones), as compact links.
+  function suggestNote(id) {
+    const d = NODES[normId(id)];
+    if (!d || !d.sg) return "";
+    const links = d.sg.map(([s, why]) => `<span class="cmp-cwe" data-id="${s}" ` +
+      `title="${escHtml(NODES[s].n + (why ? ": " + why : ""))}"><span class="cls-id">CWE-${s}</span></span>`).join(" ");
+    return `<span class="dep-note sg">MITRE suggests ${links}</span>`;
   }
 
   /* ── Edge index for the active view ─────────────────────
@@ -435,7 +448,9 @@
     return `<h3>${title} (${new Set(ids).size})</h3><ul class="rel">${items}</ul>`;
   }
 
+  let infoId = null;
   function updateInfo(id) {
+    infoId = id;
     const d = NODES[id];
     const kind = kindOf(d);
     const out = allOut(id), inn = allIn(id); // every relation, whatever the graph toggles show
@@ -449,6 +464,14 @@
     if (d.u) html += usageBadge(d.u, "Mapping: ");
     html += `</div>`;
     if (d.d) html += `<p class="desc">${escHtml(d.d)}</p>`;
+    if (d.sg) {
+      // MITRE's comment, unless it only repeats the suggested CWE's name ("Specified Quantity").
+      const note = (s, why) => why && !NODES[s].n.toLowerCase().includes(why.toLowerCase())
+        ? `<span class="sg-why">${escHtml(why)}</span>` : "";
+      html += `<h3>MITRE mapping suggestions (${d.sg.length})</h3><ul class="rel">` + d.sg.map(([s, why]) =>
+        `<li><a href="#${s}" class="info-nav" data-id="${s}">CWE-${s}</a> <span class="rel-name">${escHtml(NODES[s].n)}` +
+        `${note(s, why)}</span></li>`).join("") + `</ul>`;
+    }
 
     html += relList("Parents", pick(out, "ChildOf", "t"));
     html += relList("Children", pick(inn, "ChildOf", "s"));
@@ -458,6 +481,13 @@
     html += relList("Can follow", pick(inn, "CanPrecede", "s"));
     html += relList("Requires", pick(out, "Requires", "t"));
     html += relList("Required by", pick(inn, "Requires", "s"));
+    const ex = EXAMPLES && EXAMPLES[id];
+    if (ex) {
+      html += `<details class="examples"><summary>Observed examples (${ex.length})</summary><ul class="rel">` +
+        ex.map(([ref, desc]) => `<li>${/^CVE-/.test(ref)
+          ? `<a href="https://www.cve.org/CVERecord?id=${encodeURIComponent(ref)}" target="_blank" rel="noopener">${escHtml(ref)}</a>`
+          : `<span>${escHtml(ref)}</span>`} <span class="rel-name">${escHtml(desc)}</span></li>`).join("") + `</ul></details>`;
+    }
 
     html += `<a class="mitre" href="https://cwe.mitre.org/data/definitions/${encodeURIComponent(id)}.html" ` +
       `target="_blank" rel="noopener">View CWE-${escHtml(id)} on MITRE →</a>`;
@@ -741,7 +771,8 @@
     if (!d) return `<span class="cmp-cwe static"><span class="cls-id">${escHtml(cwe)}</span>${extra}</span>`;
     const usage = d.u && d.u !== "Allowed" ? " " + usageBadge(d.u) : "";
     return `<span class="cmp-cwe" data-id="${id}" title="${escHtml(d.n)}">${iconImg(kindOf(d), 12)}` +
-      `<span class="cls-id">CWE-${id}</span><span class="cls-name">${escHtml(d.n)}</span>${usage}${extra}</span>`;
+      `<span class="cls-id">CWE-${id}</span><span class="cls-name">${escHtml(d.n)}</span>${usage}${extra}</span>` +
+      suggestNote(id);
   }
 
   // modelIds: the model's picks in rank order (top 3, or the skill's one CWE).
@@ -755,6 +786,11 @@
     const rank = modelIds.findIndex((m) => assignedIds.includes(m));
     if (rank > 0) return ["partial", "≈", `Close: the assigned CWE-${modelIds[rank]} is #${rank + 1} in ${who}'s top ${modelIds.length}.`];
     for (const a of assignedIds) {
+      if (NODES[a] && (NODES[a].sg || []).some(([s]) => s === top)) {
+        return ["partial", "≈", `Related: MITRE suggests ${who}'s CWE-${top} in place of the assigned CWE-${a} (${NODES[a].u}).`];
+      }
+    }
+    for (const a of assignedIds) {
       if (isAncestor(a, top)) return ["partial", "≈", `Related: ${who}'s CWE-${top} is a more specific child of the assigned CWE-${a}.`];
       if (isAncestor(top, a)) return ["partial", "≈", `Related: ${who}'s CWE-${top} is a broader parent of the assigned CWE-${a}.`];
     }
@@ -766,7 +802,9 @@
     return ["differ", "✗", `Differs: ${who}'s pick is not among the assigned CWEs or their parents/children.`];
   }
 
+  let lastCompare = null; // re-rendered once the observed examples arrive
   function renderCompare(modelIds, who, pending) {
+    lastCompare = [modelIds, who, pending];
     const box = $("cmp");
     const c = currentCve;
     if (!box || !c) return;
@@ -798,6 +836,11 @@
           ? `<li>${cweLink("CWE-" + modelIds[0])}${assignedIds.includes(modelIds[0]) ? "" : descHtml("CWE-" + modelIds[0])}</li>`
           : `<li class="cls-note">No CWE</li>`) +
       `</ul></div>`;
+    const exOf = EXAMPLE_OF[c.cve_id] || [];
+    if (exOf.length) {
+      html += `<p class="cmp-example">MITRE lists ${escHtml(c.cve_id)} as an observed example of ` +
+        `${exOf.map((x) => `<span class="cmp-cwe" data-id="${x}" title="${escHtml(NODES[x].n)}"><span class="cls-id">CWE-${x}</span></span>`).join(" ")}</p>`;
+    }
     if (!pending) {
       const [cls, mark, text] = verdict([...new Set(assignedIds)], modelIds, who);
       html += `<p class="cmp-verdict ${cls}"><span class="mark" aria-hidden="true">${mark}</span>${escHtml(text)}</p>`;
@@ -1153,6 +1196,17 @@
   initLegend();
   checkModel();
   buildIndex();
+  const exScript = document.createElement("script");
+  exScript.src = "data/cwe-examples.js";
+  exScript.onload = () => {
+    EXAMPLES = window.CWE_EXAMPLES || {};
+    for (const [cwe, list] of Object.entries(EXAMPLES)) {
+      for (const [ref] of list) (EXAMPLE_OF[ref.toUpperCase()] ||= []).push(cwe);
+    }
+    if (infoId) updateInfo(infoId);
+    if (lastCompare) renderCompare(...lastCompare);
+  };
+  document.body.appendChild(exScript);
   const start = parseHash();
   state.center = NODES[start.id] ? start.id : "79";
   state.mode = start.mode;

@@ -56,7 +56,10 @@ so without it paste the CVE ID. The record is fetched live
 from cve.org (CVE Services API), falling back to the local mirror. It lists each CWE with
 who assigned it (CNA or an ADP such as CISA-ADP) and flags Discouraged ones, then gives a
 verdict: **Agrees** (top pick is assigned), **Close** (an assigned CWE is in the top 3),
-**Related** (parent/child of an assigned CWE), **Differs**, or no CWE on the record yet.
+**Related** (MITRE suggests the pick in place of an assigned CWE, or it is a parent/child
+of one, or the replacement for a deprecated one), **Differs**, or no CWE on the record yet.
+Assigned CWEs that MITRE discourages show the CWEs MITRE suggests instead, and the result
+notes when MITRE lists the CVE as an observed example of a CWE.
 
 **Linux kernel text runs the `/linux-cwe` skill** (`linux_cwe.py`), through headless
 Claude Code on your account (~30 s–2 min and roughly $0.20 per lookup; one at a time):
@@ -81,7 +84,9 @@ python3 scripts/build_data.py                    # downloads cwec_latest.xml.zip
 python3 scripts/build_data.py cwec_v5.0.xml.zip  # or build from a local copy
 ```
 
-Deprecated weaknesses are not graph nodes, but their names and MITRE's suggested replacements are kept: when the model, a CVE record or an old `#613` link names one, the page marks it deprecated and links the replacements (a deep link opens the first). Categories and views are not nodes; views
+The details panel also lists MITRE's mapping suggestions and observed examples (CVEs)
+for each weakness; the examples are built into `data/cwe-examples.js` and load after the
+page starts. Deprecated weaknesses are not graph nodes, but their names and MITRE's suggested replacements are kept: when the model, a CVE record or an old `#613` link names one, the page marks it deprecated and links the replacements (a deep link opens the first). Categories and views are not nodes; views
 only select which `ChildOf` hierarchy is drawn.
 
 ## Using it
