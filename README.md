@@ -125,3 +125,24 @@ is indistinguishable from Base's blue under protanopia. The palette was checked
 all-pairs for colour-vision deficiency; the letter or glyph is the secondary encoding,
 so no node depends on colour alone. Icons are drawn in `KINDS` / `iconSvg()`
 (`js/app.js`); the CSS variables in `css/app.css` mirror the colours.
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE): free for noncommercial use, and every copy must
+keep the license and its `Required Notice: Copyright 2026 VulnCheck, Inc.` line. For
+commercial use, contact VulnCheck.
+
+The vc-weakling model is not part of this repository; the server runs without it (see
+**Without the model** above).
+
+Third-party parts keep their own terms:
+
+- `vendor/cytoscape.min.js`: Cytoscape.js, MIT, Copyright (c) 2016-2024 The Cytoscape Consortium.
+- `vendor/dagre.min.js`: dagre and graphlib, MIT, Copyright (c) 2012-2014 Chris Pettitt
+  (it also bundles lodash, MIT); the licenses are inside the file.
+- `vendor/cytoscape-dagre.js`: cytoscape-dagre, MIT, The Cytoscape Consortium.
+- `data/cwe-data.js`: built from the CWE catalog, Copyright (c) 2006-2026 The MITRE
+  Corporation, used under the [CWE Terms of Use](https://cwe.mitre.org/about/termsofuse.html).
+  CWE and the CWE logo (`images/cwe-20-years.png`) are trademarks of The MITRE Corporation.
+- `images/vc.png`: the VulnCheck logo is a trademark of VulnCheck, Inc. and is not licensed
+  under the PolyForm terms.
