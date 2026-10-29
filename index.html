@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CWE Graph Explorer</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+  <!-- Top bar: two inputs. Search looks CWEs up in the catalog; the
+       description box runs the classifier (vc-weakling, or /linux-cwe for
+       kernel text). -->
+  <header class="topbar">
+    <h1>CWE Graph</h1>
+    <form id="s-form" class="s" autocomplete="off" role="search">
+      <input id="s" type="search" spellcheck="false" aria-label="Search CWEs by ID, name or keywords"
+        placeholder="Search CWE: 79, XSS, info leak in response …">
+      <ul id="search-results" role="listbox"></ul>
+    </form>
+    <form id="q-form" class="q" autocomplete="off">
+      <div class="q-box">
+        <textarea id="q" rows="1" spellcheck="false" aria-label="Vulnerability description or CVE ID to classify"
+          placeholder="Paste a vulnerability description or CVE ID to find its CWE"></textarea>
+      </div>
+      <button type="submit" id="q-btn" disabled>Find CWE</button>
+    </form>
+    <div class="meta">
+      <span class="model-status" id="model-status"></span>
+      <span class="catalog-version" id="catalog-version"></span>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <!-- Graph -->
+    <main class="graph">
+      <div class="toolbar">
+        <div class="seg" role="group" aria-label="What to show">
+          <button id="btn-neighbors" title="Neighborhood of the current CWE">Neighborhood</button>
+          <button id="btn-ancestors" title="Every parent up to the Pillar">Ancestors</button>
+          <button id="btn-descendants" title="Every child below the current CWE">Descendants</button>
+        </div>
+        <div class="seg" role="group" aria-label="Layout direction">
+          <button id="dir-TB" title="Top-down: parents on top, children below" aria-label="Top-down layout">↓</button>
+          <button id="dir-LR" title="Left-to-right: parents on the left, children stacked to the right" aria-label="Left-to-right layout">→</button>
+        </div>
+        <label class="tb-field">Depth
+          <select id="depth-select">
+            <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option>
+          </select>
+        </label>
+        <label class="tb-field">View <select id="view-select"></select></label>
+        <div class="pop-wrap">
+          <button id="btn-edges" aria-expanded="false" aria-controls="edge-pop">Relationships ▾</button>
+          <div class="popover" id="edge-pop" hidden>
+            <ul class="legend-edges" id="edge-legend"></ul>
+          </div>
+        </div>
+        <span class="tb-spacer"></span>
+        <button id="btn-fit" title="Fit to view">Fit</button>
+        <button id="btn-layout" title="Re-run layout">Layout</button>
+        <button id="btn-png" title="Download as PNG">PNG</button>
+      </div>
+      <div class="canvas">
+        <div id="cy"></div>
+        <div class="hover-card" id="hover-card" hidden></div>
+        <ul class="key" id="node-legend" aria-label="Abstraction key"></ul>
+        <div class="status" id="status"></div>
+      </div>
+    </main>
+
+    <!-- Drag handle between the graph and the right panel -->
+    <div class="resizer" id="resizer" role="separator" aria-orientation="vertical" aria-label="Resize the side panel"
+      tabindex="0" title="Drag to resize · double-click to reset"></div>
+
+    <!-- Right panel: classifier result, then the selected CWE -->
+    <aside class="side">
+      <section id="result-panel" class="result" hidden>
+        <div class="sec-head">
+          <span class="sec-label">Classifier result</span>
+          <button type="button" id="result-close" title="Clear result" aria-label="Clear result">×</button>
+        </div>
+        <div id="classify-results"></div>
+      </section>
+      <section id="info-panel" class="info"></section>
+    </aside>
+
+  </div>
+
+  <script src="vendor/cytoscape.min.js"></script>
+  <script src="vendor/dagre.min.js"></script>
+  <script src="vendor/cytoscape-dagre.js"></script>
+  <script src="data/cwe-data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

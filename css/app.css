@@ -1,0 +1,337 @@
+/* ── Tokens: plain, traditional light theme ──────────────── */
+:root {
+  --bg:        #ffffff;
+  --panel:     #f4f4f2;
+  --border:    #c9c9c4;
+  --rule:      #dcdcd7;
+  --text:      #1f1f1f;
+  --muted:     #5c5c58;
+  --link:      #0b57a4;
+  --link-hover:#083f78;
+  --accent:    #0b57a4;
+  --hover-bg:  #e6ecf4;
+  --ok:        #2e7d32;
+
+  /* Abstraction palette, after MITRE's CWE-site icons (validated all-pairs on
+     the light surface; the letter/glyph is the secondary encoding). The icons
+     themselves are drawn in KINDS / iconSvg() in js/app.js; keep in sync. */
+  --pillar:   #919191;
+  --class:    #358d33;
+  --base:     #3c5292;
+  --variant:  #c06abd;
+  --compound: #3c5292;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+/* App shell: only the right panel scrolls. Clipping the page (and .canvas
+   below) matters: Cytoscape sizes its canvas in whole pixels, so a
+   fractional-height container overflows by <1px, which toggles a page
+   scrollbar, which resizes the canvas, in an endless flicker loop. */
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+a { color: var(--link); text-decoration: none; }
+a:hover { color: var(--link-hover); text-decoration: underline; }
+button, select, textarea { font: inherit; color: var(--text); }
+select {
+  padding: 3px 6px; font-size: 12.5px; border: 1px solid var(--border); border-radius: 3px; background: #fff;
+}
+select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+/* ── Top bar ─────────────────────────────────────────────── */
+.topbar {
+  position: relative; z-index: 30;  /* the search dropdown and grown input overlay the graph */
+  display: flex; align-items: center; gap: 16px;
+  padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--bg);
+}
+.topbar h1 { font-size: 16px; font-weight: 600; white-space: nowrap; }
+.meta { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.3; white-space: nowrap; }
+.catalog-version { font-size: 11px; color: var(--muted); }
+.model-status { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+.model-status::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--border);
+}
+.model-status.ready::before { background: var(--ok); }
+
+/* The description box. Two rows tall in the bar (46px = 2 × 18px lines + 8px
+   top padding + borders); longer text grows it as an overlay while editing, so
+   it doesn't push the layout around and the graph never resizes. */
+.q { flex: 1; display: flex; gap: 6px; max-width: 760px; }
+.q-box { flex: 1; position: relative; height: 46px; }
+#q {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 46px; max-height: 220px; padding: 8px 10px; resize: none; overflow-y: hidden;
+  font-size: 13px; line-height: 18px;
+  border: 1px solid var(--border); border-radius: 3px; background: #fff;
+}
+#q.grown { box-shadow: 0 6px 18px rgba(0,0,0,.12); overflow-y: auto; }
+/* Not focused: no bottom padding, so the content box is exactly two lines and a
+   third line never shows through. */
+#q:not(:focus) { padding-bottom: 0; overflow: hidden; }
+#q-btn {
+  height: 46px; padding: 0 14px; font-size: 13px; cursor: pointer; white-space: nowrap;
+  background: var(--accent); color: #fff; border: 1px solid var(--accent); border-radius: 3px;
+}
+#q-btn:hover:not(:disabled) { background: var(--link-hover); }
+#q-btn:disabled { background: #fff; color: var(--muted); border-color: var(--border); cursor: default; }
+
+/* CWE search: a compact box; its dropdown is wider than the box. */
+.s { position: relative; width: 250px; flex: none; }
+#s {
+  width: 100%; height: 34px; padding: 0 10px; font-size: 13px;
+  border: 1px solid var(--border); border-radius: 3px; background: #fff;
+}
+#s:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+#search-results {
+  position: absolute; top: 37px; left: 0; width: 520px; list-style: none;
+  max-height: 320px; overflow-y: auto; background: #fff;
+  border: 1px solid var(--border); border-radius: 3px; box-shadow: 0 6px 18px rgba(0,0,0,.12);
+}
+#search-results:empty { display: none; }
+#search-results li {
+  padding: 5px 10px; cursor: pointer; font-size: 13px; line-height: 1.4;
+}
+#search-results li:hover, #search-results li.active { background: var(--hover-bg); }
+#search-results .sr-id { font-weight: 600; color: var(--link); margin-right: 6px; }
+#search-results .sr-aka { font-size: 11.5px; color: var(--muted); }
+
+/* ── Layout ──────────────────────────────────────────────── */
+.layout { flex: 1; display: flex; min-height: 0; }
+.graph { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
+.canvas { flex: 1; position: relative; overflow: hidden; min-height: 0; }
+#cy { position: absolute; inset: 0; }
+/* Hovered CWE's description, beside the node (see showHoverCard in js/app.js). */
+.hover-card {
+  position: absolute; z-index: 5; width: 300px; max-height: 260px; overflow: hidden;
+  padding: 8px 10px; pointer-events: none; font-size: 12px; line-height: 1.45;
+  background: #fff; border: 1px solid var(--border); border-radius: 3px; box-shadow: 0 6px 18px rgba(0,0,0,.12);
+}
+.hover-card .hc-head { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.hover-card .hc-id { font-weight: 700; color: var(--link); }
+.hover-card .hc-name { font-weight: 600; margin-bottom: 4px; }
+.hover-card .hc-desc { margin: 0; color: var(--text); }
+.side {
+  flex: none; width: 380px; min-width: 280px; overflow-y: auto;  /* width is set by dragging the .resizer */
+  background: var(--panel); border-left: 1px solid var(--border);
+}
+
+/* Drag handle on the panel's left border: an 8px grab area that takes no layout space. */
+.resizer {
+  flex: none; width: 8px; margin: 0 -4px; position: relative; z-index: 15;
+  cursor: col-resize; touch-action: none;
+}
+.resizer::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: transparent;
+}
+.resizer:hover::after, .resizer.dragging::after, .resizer:focus-visible::after { background: var(--accent); }
+.resizer:focus-visible { outline: none; }
+body.resizing { cursor: col-resize; user-select: none; }
+
+/* ── Graph toolbar ───────────────────────────────────────── */
+.toolbar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 7px 10px; border-bottom: 1px solid var(--rule); background: var(--bg);
+}
+.toolbar button {
+  font-size: 12.5px; padding: 3px 10px; cursor: pointer;
+  background: #fff; border: 1px solid var(--border); border-radius: 3px;
+}
+.toolbar button:hover { background: var(--hover-bg); border-color: var(--accent); }
+.seg { display: inline-flex; }
+.seg button { border-radius: 0; margin-left: -1px; }
+.seg button:first-child { border-radius: 3px 0 0 3px; margin-left: 0; }
+.seg button:last-child { border-radius: 0 3px 3px 0; }
+.seg button.active { background: var(--accent); border-color: var(--accent); color: #fff; position: relative; }
+.tb-field { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--muted); }
+#view-select { max-width: 230px; }
+.tb-spacer { flex: 1; }
+
+.pop-wrap { position: relative; }
+.popover {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 20;
+  background: #fff; border: 1px solid var(--border); border-radius: 3px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.12); padding: 8px 12px; min-width: 180px;
+}
+.legend-edges { list-style: none; display: grid; gap: 4px; }
+.legend-edges label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12.5px; white-space: nowrap; }
+.legend-edges input { accent-color: var(--accent); }
+
+/* ── Graph overlays: key + status ────────────────────────── */
+.key {
+  position: absolute; left: 10px; bottom: 10px; z-index: 10; list-style: none;
+  display: flex; flex-wrap: wrap; gap: 4px 12px; max-width: calc(100% - 20px);
+  padding: 5px 9px; font-size: 12px; background: rgba(255,255,255,.92);
+  border: 1px solid var(--rule); border-radius: 3px;
+}
+.key li { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.key .kind-icon { margin-right: 0; }
+/* Logo fixed in the bottom-right corner, behind the graph: it's a background
+   of the canvas area, so it doesn't pan or zoom, and nodes draw over it. */
+.canvas::before {
+  content: ""; position: absolute; right: 222px; bottom: 36px;  /* left of the VulnCheck logo */
+  width: 190px; height: 49px; pointer-events: none;
+  background: url(../images/cwe-20-years.png) no-repeat center / contain;
+  opacity: .75;
+}
+/* "Powered by VulnCheck", right of the CWE logo, above the status line
+   (bottom offset centres it on the taller CWE logo). */
+.canvas::after {
+  content: ""; position: absolute; right: 14px; bottom: 41px;
+  width: 190px; height: 39px; pointer-events: none;  /* 2400×486 at 190px wide */
+  background: url(../images/vc.png) no-repeat center / contain;
+  opacity: .75;
+}
+.status {
+  position: absolute; right: 10px; bottom: 10px; z-index: 10;
+  font-size: 11.5px; color: var(--muted); background: rgba(255,255,255,.92); padding: 2px 6px;
+}
+.kind-icon { flex: none; vertical-align: -2px; margin-right: 4px; }
+
+/* ── Right panel ─────────────────────────────────────────── */
+.result { padding: 12px 16px 14px; border-bottom: 1px solid var(--border); background: #fff; font-size: 12.5px; }
+.sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.sec-label {
+  font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted);
+}
+#result-close {
+  background: none; border: 0; font-size: 18px; line-height: 1; color: var(--muted); cursor: pointer; padding: 0 2px;
+}
+#result-close:hover { color: var(--text); }
+
+/* The description the model analyzed */
+.analyzed { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--rule); }
+.analyzed-head { font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 3px; }
+.analyzed-head .cls-note { font-weight: 400; }
+.analyzed-text {
+  white-space: pre-wrap; font-size: 12px; line-height: 1.45; color: var(--text);
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; padding: 6px 8px;
+}
+
+/* Assigned (cve.org) vs model */
+.cmp { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--rule); }
+.cmp:empty { display: none; }
+.cmp-head { margin-bottom: 6px; }
+.cmp-head a { font-weight: 600; }
+.cmp-grid { display: grid; grid-template-columns: 78px 1fr; gap: 6px 10px; }
+.cmp-label { font-size: 11px; font-weight: 600; color: var(--muted); line-height: 1.35; padding-top: 2px; }
+.cmp-label .cls-note { font-weight: 400; }
+.cmp-list { list-style: none; }
+.cmp-list li { padding: 1px 0; }
+.cmp-cwe { cursor: pointer; line-height: 1.35; }
+.cmp-cwe.static { cursor: default; }
+.cmp-cwe .cls-id { font-weight: 600; color: var(--link); margin-right: 4px; }
+.cmp-cwe.static .cls-id { color: var(--text); }
+.cmp-cwe .cls-name { color: var(--muted); }
+.cmp-cwe .badge { margin-left: 4px; padding: 0 5px; }
+.cmp-by { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.cwe-desc {
+  margin: 2px 0 6px; font-size: 12px; line-height: 1.4; color: var(--text);
+}
+.cls-list .cwe-desc { grid-column: 1 / -1; margin-bottom: 2px; }
+.cls-list .dep-note { grid-column: 1 / -1; }
+.cmp-by::before { content: "· "; }
+.cmp-verdict {
+  display: flex; gap: 6px; align-items: baseline; margin-top: 8px; padding: 5px 8px;
+  border-radius: 3px; border: 1px solid var(--rule); background: var(--panel);
+}
+.cmp-verdict .mark { font-weight: 700; }
+.cmp-verdict.agree   { border-color: #b9dcb8; background: #eef7ee; }
+.cmp-verdict.agree .mark { color: var(--ok); }
+.cmp-verdict.partial { border-color: #ecd9a8; background: #fdf5e3; }
+.cmp-verdict.partial .mark { color: #8a5a00; }
+.cmp-verdict.differ  { border-color: #ebbcb8; background: #fbeeed; }
+.cmp-verdict.differ .mark { color: #b3261e; }
+
+.cls-verdict { margin-bottom: 6px; color: var(--text); }
+.cls-verdict strong { font-weight: 600; }
+.cls-note { color: var(--muted); }
+.dep-note { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
+.dep-note .cmp-cwe { display: block; }
+.cls-error { color: #b3261e; }
+.cls-list { list-style: none; }
+.cls-list li {
+  display: grid; grid-template-columns: 1fr 72px; gap: 2px 8px; align-items: center;
+  padding: 4px 6px; margin: 0 -6px; border-radius: 2px; cursor: pointer;
+}
+.cls-list li:hover { background: var(--hover-bg); }
+.cls-list li.current { background: var(--hover-bg); }
+.cls-list li.static { cursor: default; background: none; }
+.cls-list .cls-id { font-weight: 600; color: var(--link); margin-right: 4px; }
+.cls-list .cls-name { color: var(--muted); }
+.cls-list .cls-label { line-height: 1.35; }
+.cls-conf { display: flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; font-size: 11.5px; }
+.cls-bar { flex: 1; height: 4px; background: var(--rule); border-radius: 2px; overflow: hidden; }
+.cls-bar span { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+
+.cls-warn { color: #8a5a00; background: #fdf5e3; border: 1px solid #ecd9a8; padding: 4px 6px; border-radius: 3px; margin-bottom: 6px; }
+#lcwe { margin-top: 8px; }
+#lcwe p { margin-bottom: 6px; }
+#lcwe code { font-size: 11.5px; }
+.lcwe-field .info-label { font-weight: 600; color: var(--muted); }
+.lcwe-run { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.lcwe-run button {
+  font-size: 11.5px; padding: 1px 8px; cursor: pointer;
+  background: #fff; border: 1px solid var(--border); border-radius: 3px;
+}
+.spinner {
+  width: 12px; height: 12px; border-radius: 50%; flex: none;
+  border: 2px solid var(--rule); border-top-color: var(--accent);
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+
+/* Selected CWE details */
+.info { padding: 14px 16px; font-size: 13px; }
+.info .hint { color: var(--muted); font-style: italic; }
+.info h2 { font-size: 16px; margin-bottom: 2px; }
+.info .cwe-name { font-weight: 500; margin-bottom: 8px; }
+.info .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 7px; border: 1px solid var(--border); border-radius: 3px;
+  font-size: 11px; background: #fff; color: var(--text);
+}
+.badge .kind-icon { margin-right: 0; }
+/* MITRE mapping usage: the same scheme as the agree/close/differ verdicts */
+.badge.usage-ok   { background: #eef7ee; border-color: #b9dcb8; color: #1e5a20; }
+.badge.usage-warn { background: #fdf5e3; border-color: #ecd9a8; color: #7a4f00; }
+.badge.usage-bad  { background: #fbeeed; border-color: #ebbcb8; color: #a3221b; }
+.info .desc { color: var(--text); margin-bottom: 12px; }
+.info h3 {
+  font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted); margin: 10px 0 3px;
+}
+.info ul { list-style: none; }
+.info li { padding: 1px 0; }
+.info .rel-name { color: var(--muted); }
+/* Relationship lists: IDs in one column, titles in the next, so a title that
+   wraps stays aligned under its first line (and every title starts at the same x). */
+.info ul.rel { display: grid; grid-template-columns: max-content 1fr; gap: 2px 6px; }
+.info ul.rel li { display: contents; }
+.info .mitre { display: inline-block; margin-top: 12px; font-size: 12px; }
+.cwe-diagram { margin-top: 12px; }
+.cwe-diagram img {
+  display: block; max-width: 100%; height: auto; background: #fff;
+  border: 1px solid var(--rule); border-radius: 3px;
+}
+.cwe-diagram figcaption { margin-top: 4px; font-size: 11px; color: var(--muted); }
+
+/* ── Narrow screens: graph on top, panel below ───────────── */
+@media (max-width: 860px) {
+  .topbar { flex-wrap: wrap; gap: 8px 12px; padding: 8px 12px; }
+  .s { order: 3; flex-basis: 100%; width: auto; }
+  #search-results { width: 100%; }
+  .q { order: 4; flex-basis: 100%; max-width: none; }
+  .layout { flex-direction: column; }
+  .graph { flex: none; height: 58vh; }
+  .side { width: auto !important; min-width: 0; flex: 1; border-left: 0; border-top: 1px solid var(--border); }
+  .resizer { display: none; }
+  .toolbar { gap: 6px; }
+  .tb-spacer { display: none; }
+  .status { display: none; }
+  .key .k-label { display: none; }  /* icons only; names are in each item's tooltip */
+}
