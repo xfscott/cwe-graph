@@ -21,7 +21,17 @@ Deep links: `index.html#79`, `#79/ancestors`, `#79/descendants`.
 
 The top bar has two inputs: **Search CWE** (left) looks CWEs up in the catalog by ID or
 name; the **description box** (right) takes a vulnerability description or CVE ID and
-runs the classifier. Classifying needs the bundled server, run with the models venv (it
+runs the classifier.
+
+Two parts of this are local add-ons that are **not in this repo**. The server runs without
+either and says which one is missing:
+
+| Add-on | Lives in | Without it |
+|---|---|---|
+| vc-weakling model (top-3 prediction) | `~/Desktop/models/cwe` (`WEAKLING_DIR`), plus torch + transformers | CVE lookup and assigned CWEs only |
+| `/linux-cwe` skill (kernel text) | `~/.claude/skills/linux-cwe` (`LINUX_CWE_SKILL`), plus the Claude Code CLI, a kernel clone and the cvelistV5 mirror | kernel text is recognized but not run |
+
+Classifying needs the bundled server, run with the models venv (it
 needs torch + transformers):
 
 ```sh
@@ -62,7 +72,10 @@ Assigned CWEs that MITRE discourages show the CWEs MITRE suggests instead, and t
 notes when MITRE lists the CVE as an observed example of a CWE.
 
 **Linux kernel text runs the `/linux-cwe` skill** (`linux_cwe.py`), through headless
-Claude Code on your account (~30 s–2 min and roughly $0.20 per lookup; one at a time):
+Claude Code on your account (~30 s–2 min and roughly $0.20 per lookup; one at a time).
+`linux_cwe.py` is only the bridge; the skill itself is installed separately. When
+`$LINUX_CWE_SKILL/SKILL.md` or the CLI is missing, kernel text gets a "can't run
+/linux-cwe" note instead, and the kernel index isn't built. With it installed:
 
 1. The server finds the evidence the skill needs: a CVE ID or kernel commit URL/SHA in
    the text; else the kernel CVE in the mirror whose description matches the paste

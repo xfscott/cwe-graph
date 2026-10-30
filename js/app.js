@@ -645,7 +645,7 @@
     qBtn.textContent = "Find CWE";
     qBtn.disabled = !modelReady || !qInput.value.trim();
     qBtn.title = !modelReady ? modelStatus.textContent
-      : noModel ? "Look up the CVE and its assigned CWEs; kernel text runs /linux-cwe (Enter)"
+      : noModel ? `Look up the CVE and its assigned CWEs${noSkill ? "" : "; kernel text runs /linux-cwe"} (Enter)`
       : "Classify with vc-weakling (Enter)";
     if (document.activeElement === qInput) growInput();
   }
@@ -674,6 +674,7 @@
   let candidates = []; // CWE ids (no prefix) in the latest top 3
   let modelReady = false;
   let noModel = null; // why the server has no vc-weakling; CVE lookup and /linux-cwe still work
+  let noSkill = null; // why the server can't run /linux-cwe; kernel text is routed but not run
 
   function markCandidates() {
     cy.nodes().removeClass("candidate");
@@ -715,8 +716,9 @@
         showError(h.error);
       } else if (h.no_model) {
         noModel = h.no_model;
-        setModelStatus("No model: CVE lookup and /linux-cwe only", true);
-        modelStatus.title = h.no_model;
+        noSkill = h.linux && h.linux.unavailable;
+        setModelStatus(noSkill ? "No model: CVE lookup only" : "No model: CVE lookup and /linux-cwe only", true);
+        modelStatus.title = noSkill ? `${h.no_model}; ${noSkill}` : h.no_model;
       } else if (h.ready) setModelStatus(h.model, true);
       else { setModelStatus(`Loading ${h.model} …`, false); setTimeout(checkModel, 2000); }
     } catch (e) {
@@ -736,6 +738,7 @@
       : `<strong>noinfo</strong> <span class="cls-note">The model reads no specific weakness in this description.</span>`,
     nomodel: () => `<strong>No model</strong> <span class="cls-note">vc-weakling isn't installed with this server (${escHtml(noModel || "")}), so there's no top 3.</span>`,
     "linux-cwe": () => `<strong>Linux kernel</strong> <span class="cls-note">Out of vc-weakling's scope; running the /linux-cwe skill on the fix commit.</span>`,
+    noskill: (r) => `<strong>Linux kernel</strong> <span class="cls-note">Out of vc-weakling's scope; kernel CWEs come from the /linux-cwe skill, which this server can't run (${escHtml(r.no_skill || "")}).</span>`,
     missing: () => `<span class="cls-note">No description to classify.</span>`,
   };
 
@@ -884,6 +887,7 @@
     showResultPanel(html);
     if (r.status === "linux-cwe") renderCompare([], "/linux-cwe", "running …");
     else if (r.status === "nomodel") renderCompare([], "vc-weakling", "not installed");
+    else if (r.status === "noskill") renderCompare([], "/linux-cwe", "not installed");
     else renderCompare(top3.map(([c]) => normId(c)).filter((id) => /^\d+$/.test(id)), "vc-weakling");
     if (candidates.length && normId(r.pred || "") === candidates[0]) navigate(candidates[0], "neighbors");
     markCandidates();

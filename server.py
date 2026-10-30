@@ -13,7 +13,8 @@ still runs: CVE lookup, the assigned-CWE comparison and /linux-cwe work, and cla
 with status "nomodel" and no top 3. Routing then uses the copy of scope.py's rules below.
 
 Linux kernel text (route 'linux-cwe') is handed to the /linux-cwe skill through headless
-Claude Code; see linux_cwe.py.
+Claude Code; see linux_cwe.py. Without the skill or the Claude Code CLI, kernel text answers
+with status "noskill" (and "no_skill": why) and POST /api/linux-cwe returns 503.
 
   GET  /api/health              {"ok", "model", "ready", "error"?, "linux": {...}}
   POST /api/classify            {"text": "..."} → predict.classify() result (route, status, pred,
@@ -99,7 +100,7 @@ def _warm():
     """Load the model in the background so the page is usable while it loads."""
     global _error
     if NO_MODEL:
-        print(f"[cwe-graph] no model ({NO_MODEL}): classify does CVE lookup and /linux-cwe only",
+        print(f"[cwe-graph] no model ({NO_MODEL}): classify does CVE lookup (and /linux-cwe if installed)",
               file=sys.stderr, flush=True)
         _ready.set()
         return
@@ -165,7 +166,10 @@ class Handler(SimpleHTTPRequestHandler):
             self._json(200, job.view()) if job else self._json(404, {"error": "no such job"})
         elif self.path in ("/api/linux-cwe", "/api/linux-cwe?fresh=1"):
             text = self._text()
-            if text is not None:
+            no_skill = linux_cwe.unavailable()
+            if no_skill and text is not None:
+                self._json(503, {"error": no_skill})
+            elif text is not None:
                 self._json(200, linux_cwe.start(text, fresh=self.path.endswith("fresh=1")).view())
         elif self.path == "/api/classify":
             self._classify()
@@ -192,6 +196,10 @@ class Handler(SimpleHTTPRequestHandler):
             return
         with _lock:
             res = classify([row])[0]
+        if res["status"] == "linux-cwe":
+            no_skill = linux_cwe.unavailable()
+            if no_skill:
+                res["status"], res["no_skill"] = "noskill", no_skill
         if row["cve_id"]:
             res["looked_up"] = {"cve_id": row["cve_id"], "text": row["text"], "assigner": row["assigner"]}
         # The CWEs currently on the CVE's record (cve.org), to set beside the model's answer.
@@ -211,7 +219,12 @@ class Handler(SimpleHTTPRequestHandler):
 
 def main():
     threading.Thread(target=_warm, daemon=True).start()
-    threading.Thread(target=linux_cwe.INDEX.build, daemon=True).start()
+    no_skill = linux_cwe.unavailable()
+    if no_skill:
+        print(f"[cwe-graph] no /linux-cwe ({no_skill}): kernel text is routed but not run",
+              file=sys.stderr, flush=True)
+    else:
+        threading.Thread(target=linux_cwe.INDEX.build, daemon=True).start()
     threading.Thread(target=cve_lookup.INDEX.build, daemon=True).start()
     srv = ThreadingHTTPServer((HOST, PORT), partial(Handler, directory=str(ROOT)))
     print(f"[cwe-graph] serving {ROOT} on http://{HOST}:{PORT}  "

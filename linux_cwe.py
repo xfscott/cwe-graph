@@ -55,6 +55,17 @@ def find_claude():
     return max(bundled, key=os.path.getmtime) if bundled else None
 
 
+def unavailable():
+    """Why /linux-cwe can't run on this machine, or None. The skill lives outside this repo
+    (~/.claude/skills/linux-cwe), so a clone without it still serves the page; kernel text
+    then gets routed but not run."""
+    if not (SKILL_DIR / "SKILL.md").exists():
+        return f"linux-cwe skill not installed at {SKILL_DIR}"
+    if not find_claude():
+        return "Claude Code CLI not found; set CLAUDE_BIN"
+    return None
+
+
 def _norm(text):
     return " ".join(PREFIX.sub("", text or "").split()).lower()
 
@@ -356,8 +367,9 @@ def _from_results_file(res, text=""):
 
 
 def status():
-    return {"claude": bool(find_claude()), "skill": SKILL_DIR.exists(),
-            "index": "error" if INDEX.error else "ready" if INDEX.ready.is_set() else "building",
+    why = unavailable()
+    return {"claude": bool(find_claude()), "skill": SKILL_DIR.exists(), "unavailable": why,
+            "index": "off" if why else "error" if INDEX.error else "ready" if INDEX.ready.is_set() else "building",
             "kernel_cves": len(INDEX.rows)}
 
 
